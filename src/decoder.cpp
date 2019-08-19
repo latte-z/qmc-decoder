@@ -1,130 +1,129 @@
-#include <iostream>
+#include "seed.hpp"
+#include <cassert>
+#include <boost/filesystem.hpp>
 #include <fstream>
+#include <iostream>
+#include <mutex>
+#include <regex>
+#include <thread>
 #include <vector>
-#include <assert.h>
-#include <algorithm>
 
-using namespace std;
-class Seed{
-    public:
-        Seed():x(-1),y(8),dx(1),index(-1){
-            seedMap={
-                {0x4a, 0xd6, 0xca, 0x90, 0x67, 0xf7, 0x52},
-                {0x5e, 0x95, 0x23, 0x9f, 0x13, 0x11, 0x7e},
-                {0x47, 0x74, 0x3d, 0x90, 0xaa, 0x3f, 0x51},
-                {0xc6, 0x09, 0xd5, 0x9f, 0xfa, 0x66, 0xf9},
-                {0xf3, 0xd6, 0xa1, 0x90, 0xa0, 0xf7, 0xf0},
-                {0x1d, 0x95, 0xde, 0x9f, 0x84, 0x11, 0xf4},
-                {0x0e, 0x74, 0xbb, 0x90, 0xbc, 0x3f, 0x92},
-                {0x00, 0x09, 0x5b, 0x9f, 0x62, 0x66, 0xa1}
-            };
-        }
+using std::fstream;
+using std::ios;
+using std::move;
+using std::regex;
+using std::regex_replace;
+using std::string;
+using std::thread;
+using std::vector;
+using std::cout;
+using std::mutex;
+using std::lock_guard;
+using std::mutex;
 
-        uint8_t NextMask(){
-            uint8_t ret;
-            index++;
-            if(x<0)
-            {
-                dx = 1;
-                y = (8-y)%8;
-                ret = (8 -y)%8;
-                ret = 0xc3;
-            }else if(x > 6){
-                dx = -1;
-                y= 7-y;
-                ret = 0xd8;
-            }else{
-                ret = seedMap[y][x];
-            }
+namespace fs = boost::filesystem;
 
-            x += dx;
-            if(index==0x8000||(index>0x8000&&(index+1)%0x8000==0))
-                return NextMask();
-            return ret;
-        }
+mutex mtx;
 
-
-    private:
-
-        int x;
-        int y;
-        int dx;
-        int index;
-        vector<vector<uint8_t> > seedMap;
-};
-
-
-void process(string dir)
+inline void safe_out(const string &data)
 {
-    std::cout<<"decode "<<dir<<std::endl;
-    std::fstream infile(dir.c_str(),std::ios::in|std::ios::binary);
-    if(!infile.is_open())
-    {
-        cout<<"qmc file read error"<<endl;
-        return;
-    }
-
-
-    string outloc(std::move(dir));
-
-    string bak;
-    char x;
-    while((x=outloc.back())!='.')
-    {
-        bak.push_back(x);
-        outloc.pop_back();
-    }
-
-    if(bak!="0cmq"&&bak!="calfcmq"&&bak!="3cmq")
-        return;
-
-    assert(bak.size()>3);
-    for(int u=0;u<3;++u)
-        bak.pop_back();
-    std::reverse(bak.begin(),bak.end());
-    if(bak=="0"||bak=="3")
-        bak="mp3";
-    outloc+=bak;
-
-
-    auto len = infile.seekg(0,std::ios::end).tellg();
-    infile.seekg(0,ios::beg);
-    char * buffer =new char[len];
-
-    infile.read(buffer,len);
-    infile.close();
-
-    Seed seed;
-    for(int i=0;i<len;++i)
-    {
-        buffer[i]=seed.NextMask()^buffer[i];
-    }
-
-    std::fstream outfile(outloc.c_str(),ios::out|ios::binary);
-
-    if(outfile.is_open())
-    {
-        outfile.write(buffer,len);
-        outfile.close();
-    }else
-    {
-        cout<<"open dump file error"<<endl;
-    }
-    delete[] buffer;
-
-
+    lock_guard<std::mutex> lock(mtx);
+    cout << data << std::endl;
+}
+inline void safe_out(const char *data)
+{
+    lock_guard<std::mutex> lock(mtx);
+    cout << data << std::endl;
 }
 
-int main(int argc,char ** argv){
-
-    if(argc<2)
+void process(const string &dir)
+{
+    safe_out("decode: " + dir);
+    fstream infile(dir, ios::in | ios::binary);
+    if (!infile.is_open())
     {
-        std::cout<<"./decoder <qmcfile> ...."<<std::endl;
+        safe_out("qmc file read error");
+        return;
+    }
+
+    string outloc(move(dir));
+    const regex mp3_regex{"\\.(qmc3|qmc0)$"}, flac_regex{"\\.qmcflac$"};
+    auto mp3_outloc = regex_replace(outloc, mp3_regex, ".mp3");
+    auto flac_outloc = regex_replace(outloc, flac_regex, ".flac");
+
+    assert(mp3_outloc != flac_outloc);
+    outloc = (outloc != mp3_outloc ? mp3_outloc : flac_outloc);
+
+    auto len = infile.seekg(0, ios::end).tellg();
+    infile.seekg(0, ios::beg);
+    char *buffer = new char[len];
+
+    infile.read(buffer, len);
+    infile.close();
+
+    qmc_decoder::seed seed_;
+    for (int i = 0; i < len; ++i)
+    {
+        buffer[i] = seed_.NextMask() ^ buffer[i];
+    }
+
+    fstream outfile(outloc.c_str(), ios::out | ios::binary);
+
+    if (outfile.is_open())
+    {
+        outfile.write(buffer, len);
+        outfile.close();
+    }
+    else
+    {
+        safe_out("open dump file error");
+    }
+    delete[] buffer;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc > 1)
+    {
+        std::cerr << "put decoder binary file in your qmc file directory, then run it." << std::endl;
         return 1;
     }
 
-    for(int i=1;i<argc;++i)
-        process(std::string(argv[i]));
+    vector<string> qmc_paths;
+    const regex qmc_regex{"^.+\\.(qmc3|qmc0|qmcflac)$"};
+
+    for (fs::recursive_directory_iterator i{fs::path(".")}, end; i != end; ++i)
+    {
+        auto file_path = i->path().string();
+        if (fs::is_regular_file(*i) && regex_match(file_path, qmc_regex))
+        {
+            qmc_paths.emplace_back(file_path);
+        }
+    };
+
+
+    const auto n_thread = thread::hardware_concurrency();
+    vector<thread> td_group;
+
+    for (size_t i = 0; i < n_thread - 1; ++i)
+    {
+        td_group.emplace_back([&qmc_paths, &n_thread](int index) {
+            for (size_t j = index; j < qmc_paths.size(); j += n_thread)
+            {
+                process(qmc_paths[j]);
+            }
+        },
+                              i);
+    }
+    for (size_t j = n_thread - 1; j < qmc_paths.size(); j += n_thread)
+    {
+        process(qmc_paths[j]);
+    }
+
+    for (auto &&td : td_group)
+    {
+        td.join();
+    }
 
     return 0;
 }

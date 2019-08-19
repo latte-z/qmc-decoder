@@ -1,41 +1,50 @@
-# QQMusic QMC Decoder
+# QQMusic QMC Decoder (convert QMC File to MP3 or FLAC)
 
-## convert QMC File to MP3 or FLAC
-
-**SUPPORT QMC3/QMC0/QMCFLAC**
-
-* binary executable file for windows, mac and linux is prepared in 
-[release](https://github.com/Presburger/qmc-decoder/releases)
+[![LICENSE](https://img.shields.io/badge/license-Anti%20996-blue.svg?style=flat-square)](https://github.com/996icu/996.ICU/blob/master/LICENSE)
+[![LICENSE](https://img.shields.io/badge/license-MIT-red.svg?style=flat-square)](https://github.com/Presburger/qmc-decoder/blob/master/LICENSE)
 
 
-* build
+***SUPPORT QMC3/QMC0/QMCFLAC, Faster***
 
-```sh
+## Release
+
+binary executable file is released [release](https://github.com/Presburger/qmc-decoder/releases)
+
+## Build
+
+* for linux
+
+```shell
 mkdir build
 cd build
 cmake ..
-make 
+make
 ```
 
-* convert
+* for windows
 
-```sh
-#linux and mac user
+```bat
+mkdir build
 cd build
-./decoder <file1> <file2> ..... 
-#windows user
-decoder.exe <file1> <file2> .....
+cmake -G "NMake Makefiles" ..
+nmake
 ```
 
-* batch convert
+## Convert
 
-```sh
-#only for mac and linux user
-find <qmc file dir> -type f -name "*.qmc*" -print0 | xargs -0 ./decoder
-```
-* todo
+Put the execuatable file in your qmc file directory, Then run the execuatable file.
 
-find a useful xargs script works in windows,to support batch convert in windows
+For windows user, Just click the decoder.exe when you put the decoder.exe into your qmc file directory, It will convert all qmc file automatically.
+
+![eXlSt1.gif](https://s2.ax1x.com/2019/08/10/eXlSt1.gif)
+
+For mac user, Can click the decoder.command file, But you need copy the decoder.command file in your qmc file directory too.
+
+![EjHn9U.gif](https://s2.ax1x.com/2019/05/19/EjHn9U.gif)
+
+
+
+* Todo
 
 support auto fetch albums
 
